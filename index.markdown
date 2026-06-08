@@ -1,6 +1,6 @@
 ---
 layout: default
-title: Автоматический ввод веса
+title: Универсальный Контроль Веса
 ---
 
 <style>
@@ -21,7 +21,6 @@ title: Автоматический ввод веса
     padding: 20px 16px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     color: var(--text-main);
-    background-color: #f7fafc;
   }
 
   .ui-card {
@@ -36,6 +35,8 @@ title: Автоматический ввод веса
   .ui-card h2 { margin-top: 0; margin-bottom: 6px; font-size: 1.25rem; font-weight: 600; }
   .ui-card p { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 20px; }
 
+  /* Кастомная форма ввода */
+  #custom-weight-form { display: none; } /* По умолчанию скрыта, включается при успехе */
   .weight-form-group { display: flex; gap: 12px; width: 100%; }
   .input-wrapper { position: relative; flex-grow: 1; }
 
@@ -56,12 +57,6 @@ title: Автоматический ввод веса
     box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.15);
   }
 
-  /* Состояние блокировки до загрузки ID */
-  .custom-input:disabled {
-    background-color: #edf2f7;
-    cursor: not-allowed;
-  }
-
   .input-suffix {
     position: absolute;
     right: 16px; top: 50%; transform: translateY(-50%);
@@ -75,8 +70,24 @@ title: Автоматический ввод веса
   }
 
   .custom-btn:hover { background-color: var(--primary-hover); }
-  .custom-btn:disabled { background-color: #cbd5e0; cursor: not-allowed; }
 
+  /* Фрейм для оригинальной формы (резервный вариант) */
+  .original-form-wrapper {
+    display: none; /* Включается только при ошибке парсинга */
+    position: relative;
+    width: 100%;
+    height: 280px; /* Так как поле всего одно, сделаем фрейм компактным */
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+  }
+
+  .original-form-wrapper iframe {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%; border: none;
+  }
+
+  /* Адаптивный контейнер для интерактивного графика */
   .chart-responsive-container { position: relative; width: 100%; height: 380px; overflow: hidden; border-radius: 8px; }
   .chart-responsive-container iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; transition: opacity 0.3s ease; }
 
@@ -84,6 +95,10 @@ title: Автоматический ввод веса
   .spinner { width: 12px; height: 12px; border: 2px solid #cbd5e0; border-top-color: #4a5568; border-radius: 50%; animation: spin 1s linear infinite; display: none; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* Окно настройки, если в URL нет параметров */
+  .welcome-box { text-align: center; padding: 40px 20px; }
+  .welcome-box input { width: 100%; padding: 12px; margin-bottom: 12px; border: 1px solid var(--border-color); border-radius: 6px; }
+  
   @media (max-width: 480px) {
     .dashboard-container { padding: 12px 8px; }
     .ui-card { padding: 16px; margin-bottom: 16px; }
@@ -91,51 +106,70 @@ title: Автоматический ввод веса
     .custom-btn { padding: 14px; width: 100%; }
     .chart-responsive-container { height: 250px; }
     .chart-responsive-container iframe { width: 150%; height: 150%; transform: scale(0.666); transform-origin: top left; }
+    .original-form-wrapper { height: 340px; }
   }
 </style>
 
 <div class="dashboard-container">
 
-  <div class="ui-card">
-    <h2>Ввести вес</h2>
-    <p id="form-status">Синхронизация с Google Forms...</p>
+  <div class="ui-card welcome-box" id="welcome-card" style="display: none;">
+    <h2>Создать свой Dashboard</h2>
+    <p>Вставьте ссылки из адресной строки вашего браузера, чтобы сгенерировать персональный дашборд.</p>
+    <input type="text" id="setup-form-url" placeholder="Ссылка на Google Форму (viewform)">
+    <input type="text" id="setup-chart-url" placeholder="Ссылка на Google График (pubchart)">
+    <button class="custom-btn" onclick="generateDashboardLink()" style="padding: 12px 24px;">Создать дашборд</button>
+  </div>
+
+  <div id="main-dashboard" style="display: none;">
     
-    <form id="custom-weight-form" action="" method="POST" target="hidden_iframe">
-      <div class="weight-form-group">
-        <div class="input-wrapper">
-          <input type="number" step="0.1" id="weight-input" name="" placeholder="Загрузка..." class="custom-input" disabled required>
-          <span class="input-suffix">кг</span>
+    <div class="ui-card" id="form-card-wrapper">
+      <h2>Ввести вес</h2>
+      <p id="form-status" style="color: #4a5568;">Синхронизация с вашей Google Формой...</p>
+      
+      <form id="custom-weight-form" action="" method="POST" target="hidden_iframe">
+        <div class="weight-form-group">
+          <div class="input-wrapper">
+            <input type="number" step="0.1" id="weight-input" name="" placeholder="0.0" class="custom-input" required>
+            <span class="input-suffix">кг</span>
+          </div>
+          <button type="submit" id="submit-btn" class="custom-btn">Сохранить</button>
         </div>
-        <button type="submit" id="submit-btn" class="custom-btn" disabled>Сохранить</button>
-      </div>
-    </form>
-  </div>
+      </form>
 
-  <div class="ui-card">
-    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-      <div>
-        <h2>История изменений</h2>
-        <p>График обновится автоматически через 4 секунды после сохранения.</p>
-      </div>
-      <div class="refresh-badge">
-        <div class="spinner" id="refresh-spinner"></div>
-        <span id="status-text">Автообновление</span>
+      <div class="original-form-wrapper" id="fallback-iframe-wrapper">
+        <iframe id="original-google-iframe" src="">Загрузка формы…</iframe>
       </div>
     </div>
 
-    <div class="chart-responsive-container">
-      <iframe id="responsive-interactive-chart" src="https://docs.google.com/spreadsheets/d/e/2PACX-1vT5y16P0vfS6N0x70eDhHBIM-pPb1e0k--lfKurgEcWIBHtlv-KD9LyXVkP3RnLuOFnSEOSWE5AIb7N/pubchart?oid=24048480&format=interactive"></iframe>
-    </div>
-  </div>
+    <div class="ui-card">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <div>
+          <h2>История изменений</h2>
+          <p>График обновится автоматически через 4 секунды после сохранения или взаимодействия.</p>
+        </div>
+        <div class="refresh-badge">
+          <div class="spinner" id="refresh-spinner"></div>
+          <span id="status-text">Автообновление</span>
+        </div>
+      </div>
 
+      <div class="chart-responsive-container">
+        <iframe id="responsive-interactive-chart" src=""></iframe>
+      </div>
+    </div>
+
+  </div>
 </div>
 
 <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
 
 <script>
-  // ⚠️ ЕСЛИ МЕНЯЕТЕ ФОРМУ — МЕНЯЙТЕ ТОЛЬКО ЭТУ ССЫЛКУ:
-  const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSei-sxllN2AEFnCsEOc4huBwBXRNbnFq50oV5usLWZbdJT_Yg/viewform';
+  const urlParams = new URLSearchParams(window.location.search);
+  const rawFormUrl = urlParams.get('form');
+  const rawChartUrl = urlParams.get('chart');
 
+  const welcomeCard = document.getElementById('welcome-card');
+  const mainDashboard = document.getElementById('main-dashboard');
   const formElement = document.getElementById('custom-weight-form');
   const inputElement = document.getElementById('weight-input');
   const btnElement = document.getElementById('submit-btn');
@@ -143,61 +177,107 @@ title: Автоматический ввод веса
   const chartIframe = document.getElementById('responsive-interactive-chart');
   const spinner = document.getElementById('refresh-spinner');
   const statusText = document.getElementById('status-text');
+  
+  const fallbackWrapper = document.getElementById('fallback-iframe-wrapper');
+  const originalIframe = document.getElementById('original-google-iframe');
+  const formCardWrapper = document.getElementById('form-card-wrapper');
 
-  // Устанавливаем action для отправки данных формы
-  formElement.action = GOOGLE_FORM_URL.replace('/viewform', '/formResponse');
+  let userInteracted = false;
+  let updateInterval = null;
 
-  // ФУНКЦИЯ ПАРСИНГА ФОРМЫ НА СТОРОНЕ КЛИЕНТА
-  async function autoDiscoverFieldId() {
+  if (!rawFormUrl || !rawChartUrl) {
+    welcomeCard.style.display = 'block';
+  } else {
+    mainDashboard.style.display = 'block';
+    
+    const cleanedFormUrl = rawFormUrl.split('?')[0].replace('/formResponse', '/viewform');
+    let cleanedChartUrl = rawChartUrl;
+    if (!cleanedChartUrl.includes('format=interactive')) {
+      cleanedChartUrl = cleanedChartUrl.split('&format=')[0].split('?format=')[0] + '&format=interactive';
+    }
+
+    formElement.action = cleanedFormUrl.replace('/viewform', '/formResponse');
+    chartIframe.src = cleanedChartUrl;
+
+    // Сразу настраиваем резервный iframe на случай неудачи парсинга
+    originalIframe.src = cleanedFormUrl + '?embedded=true';
+
+    // Пробуем кастомизировать
+    autoDiscoverFieldId(cleanedFormUrl);
+  }
+
+  async function autoDiscoverFieldId(targetFormUrl) {
     try {
-      // Используем бесплатный прокси allorigins для обхода CORS ограничений Google
-      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(GOOGLE_FORM_URL)}`;
+      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetFormUrl)}`;
       const response = await fetch(proxyUrl);
-      const data = await response.json();
-      const htmlText = data.contents;
-
-      // Регулярное выражение ищет технический массив Google, где лежат ID полей
+      if(!response.ok) throw new Error("CORS Proxy failed");
+      
+      const htmlText = await response.text();
       const regex = /FB_PUBLIC_LOAD_DATA_\s*=\s*(.*?);/s;
       const match = htmlText.match(regex);
 
       if (match && match[1]) {
-        // Парсим массив данных Google Формы
         const rawData = JSON.parse(match[1]);
-        const formFields = rawData[1][1];
+        const firstFieldId = rawData[1][1][0][4][0][0];
         
-        // Берем ID самого первого поля в форме
-        const firstFieldId = formFields[0][4][0][0];
-        const entryId = `entry.${firstFieldId}`;
-
-        // Настраиваем HTML-элементы найденным ID
-        inputElement.name = entryId;
-        inputElement.disabled = false;
-        inputElement.placeholder = "0.0";
-        btnElement.disabled = false;
-        formStatus.innerText = "Система готова к вводу веса.";
-        console.log(`Успешно обнаружен ID поля: ${entryId}`);
+        // Успех! Активируем кастомную форму
+        inputElement.name = `entry.${firstFieldId}`;
+        formElement.style.display = 'block';
+        formStatus.innerText = "Система готова к быстрому вводу веса.";
+        
+        // Навешиваем обработчик на кастомную форму
+        initCustomFormLogic();
       } else {
-        throw new Error("Не удалось прочитать структуру формы");
+        throw new Error("Парсинг структуры не удался");
       }
     } catch (error) {
-      console.error(error);
-      formStatus.innerHTML = "<span style='color: #e53e3e;'>Ошибка синхронизации. Введите ID вручную.</span>";
+      console.warn("Кастомизация не удалась. Включаем бесшовный откат к оригиналу.");
+      
+      // Откат: прячем кастомную форму, показываем оригинальный фрейм Google
+      formElement.style.display = 'none';
+      fallbackWrapper.style.display = 'block';
+      formStatus.innerHTML = "Используется стандартный интерфейс ввода.";
+      
+      // Запускаем отслеживание активности для оригинального фрейма (чтобы график всё равно обновлялся по таймеру)
+      initFallbackTimerLogic();
     }
   }
 
-  // Запускаем автопоиск ID сразу при загрузке страницы
-  autoDiscoverFieldId();
+  // СЦЕНАРИЙ А: Логика работы идеальной кастомной формы
+  function initCustomFormLogic() {
+    formElement.addEventListener('submit', function() {
+      triggerChartRefresh(4000); // Обновляем через 4 секунды после клика "Сохранить"
+      setTimeout(() => { inputElement.value = ''; }, 500);
+    });
+  }
 
-  // Логика отправки формы и обновления графика (осталась прежней)
-  formElement.addEventListener('submit', function() {
-    spinner.style.display = 'block';
-    statusText.innerText = 'Сохранение...';
-    chartIframe.style.opacity = '0.4';
+  // СЦЕНАРИЙ Б: Логика для оригинального Iframe (запуск фонового обновления при тапе/клике)
+  function initFallbackTimerLogic() {
+    formCardWrapper.addEventListener('click', startSmartTimer);
+    formCardWrapper.addEventListener('touchstart', startSmartTimer);
 
+    window.addEventListener('blur', function() {
+      if (document.activeElement.tagName === 'IFRAME' && document.activeElement.id === 'original-google-iframe') {
+        startSmartTimer();
+      }
+    });
+  }
+
+  function startSmartTimer() {
+    if (userInteracted) return;
+    userInteracted = true;
+    // В режиме iframe обновляем каждые 10 секунд после того, как пользователь нажал на форму
+    updateInterval = setInterval(() => { triggerChartRefresh(0); }, 10000);
+  }
+
+  // Универсальный движок перезагрузки графика в обход кэша
+  function triggerChartRefresh(delayMs) {
     setTimeout(function() {
       if (!chartIframe) return;
-      statusText.innerText = 'Обновление графика...';
-      
+      spinner.style.display = 'block';
+      statusText.innerText = 'Обновление...';
+      chartIframe.style.opacity = '0.4';
+
       const originalSrc = chartIframe.src.split('&cacheBust=')[0];
       chartIframe.src = originalSrc + '&cacheBust=' + new Date().getTime();
       
@@ -205,9 +285,19 @@ title: Автоматический ввод веса
         chartIframe.style.opacity = '1';
         spinner.style.display = 'none';
         statusText.innerText = 'Успешно обновлено';
-        inputElement.value = '';
         setTimeout(() => { statusText.innerText = 'Автообновление'; }, 3000);
       };
-    }, 4000);
-  });
+    }, delayMs);
+  }
+
+  // Генератор ссылок для главного экрана
+  function generateDashboardLink() {
+    const fUrl = document.getElementById('setup-form-url').value.trim();
+    const cUrl = document.getElementById('setup-chart-url').value.trim();
+    if(fUrl && cUrl) {
+      window.location.href = `${window.location.origin}${window.location.pathname}?form=${encodeURIComponent(fUrl)}&chart=${encodeURIComponent(cUrl)}`;
+    } else {
+      alert("Пожалуйста, заполните обе ссылки!");
+    }
+  }
 </script>
