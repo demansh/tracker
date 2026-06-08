@@ -236,40 +236,41 @@ title: Универсальный Контроль Веса
     setInterval(() => { triggerChartRefresh(0); }, 10000);
   }
 
-  // Перезагрузка интерактивного графика в обход кэша
+  // Перезагрузка интерактивного графика с полным пересозданием фрейма (обход кэша Google)
   function triggerChartRefresh(delayMs) {
     setTimeout(function() {
       if (!chartIframe) return;
+      
       spinner.style.display = 'block';
       statusText.innerText = 'Обновление...';
       chartIframe.style.opacity = '0.4';
 
-      const originalSrc = chartIframe.src.split('&cacheBust=')[0];
-      chartIframe.src = originalSrc + '&cacheBust=' + new Date().getTime();
+      // 1. Получаем чистый базовый URL графика без старых хвостов кэша
+      const baseSrc = chartIframe.src.split('&cacheBust=')[0];
+      const newSrc = baseSrc + '&cacheBust=' + new Date().getTime();
       
-      chartIframe.onload = function() {
-        chartIframe.style.opacity = '1';
+      // 2. Хитрый трюк: клонируем фрейм, чтобы полностью сбросить внутренний кэш браузера и сети
+      const parent = chartIframe.parentNode;
+      const newIframe = document.createElement('iframe');
+      
+      // Копируем все свойства старого фрейма в новый
+      newIframe.id = chartIframe.id;
+      newIframe.src = newSrc;
+      
+      // Перевешиваем событие успешной загрузки на новый фрейм
+      newIframe.onload = function() {
+        newIframe.style.opacity = '1';
         spinner.style.display = 'none';
         statusText.innerText = 'Успешно обновлено';
         setTimeout(() => { statusText.innerText = 'Автообновление'; }, 3000);
       };
-    }, delayMs);
-  }
 
-  // Сборщик персональной ссылки для адресной строки
-  function generateDashboardLink() {
-    const fUrl = document.getElementById('setup-form-url').value.trim();
-    const cUrl = document.getElementById('setup-chart-url').value.trim();
-    const eId = document.getElementById('setup-entry-id').value.trim();
-    
-    if(fUrl && cUrl) {
-      let finalLink = `${window.location.origin}${window.location.pathname}?form=${encodeURIComponent(fUrl)}&chart=${encodeURIComponent(cUrl)}`;
-      if(eId) {
-        finalLink += `&entry=${encodeURIComponent(eId.includes('entry.') ? eId : 'entry.' + eId)}`;
-      }
-      window.location.href = finalLink;
-    } else {
-      alert("Пожалуйста, заполните поля формы и графика!");
-    }
+      // 3. Физически заменяем старый фрейм на новый в HTML-разметке
+      parent.replaceChild(newIframe, chartIframe);
+      
+      // Обновляем глобальную переменную, чтобы скрипт видел новый фрейм при следующем вводе
+      window.chartIframe = newIframe;
+
+    }, delayMs);
   }
 </script>
