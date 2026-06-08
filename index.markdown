@@ -36,7 +36,7 @@ title: Универсальный Контроль Веса
   .ui-card p { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 20px; }
 
   /* Кастомная форма ввода */
-  #custom-weight-form { display: none; } /* По умолчанию скрыта, включается при успехе */
+  #custom-weight-form { display: none; } 
   .weight-form-group { display: flex; gap: 12px; width: 100%; }
   .input-wrapper { position: relative; flex-grow: 1; }
 
@@ -71,12 +71,12 @@ title: Универсальный Контроль Веса
 
   .custom-btn:hover { background-color: var(--primary-hover); }
 
-  /* Фрейм для оригинальной формы (резервный вариант) */
+  /* Фрейм для оригинальной формы */
   .original-form-wrapper {
-    display: none; /* Включается только при ошибке парсинга */
+    display: none; 
     position: relative;
     width: 100%;
-    height: 280px; /* Так как поле всего одно, сделаем фрейм компактным */
+    height: 280px; 
     border-radius: 8px;
     overflow: hidden;
     border: 1px solid var(--border-color);
@@ -87,7 +87,7 @@ title: Универсальный Контроль Веса
     top: 0; left: 0; width: 100%; height: 100%; border: none;
   }
 
-  /* Адаптивный контейнер для интерактивного графика */
+  /* Контейнер для интерактивного графика */
   .chart-responsive-container { position: relative; width: 100%; height: 380px; overflow: hidden; border-radius: 8px; }
   .chart-responsive-container iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; transition: opacity 0.3s ease; }
 
@@ -95,9 +95,9 @@ title: Универсальный Контроль Веса
   .spinner { width: 12px; height: 12px; border: 2px solid #cbd5e0; border-top-color: #4a5568; border-radius: 50%; animation: spin 1s linear infinite; display: none; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* Окно настройки, если в URL нет параметров */
+  /* Конфигуратор ссылок */
   .welcome-box { text-align: center; padding: 40px 20px; }
-  .welcome-box input { width: 100%; padding: 12px; margin-bottom: 12px; border: 1px solid var(--border-color); border-radius: 6px; }
+  .welcome-box input { width: 100%; padding: 12px; margin-bottom: 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.9rem; }
   
   @media (max-width: 480px) {
     .dashboard-container { padding: 12px 8px; }
@@ -114,9 +114,10 @@ title: Универсальный Контроль Веса
 
   <div class="ui-card welcome-box" id="welcome-card" style="display: none;">
     <h2>Создать свой Dashboard</h2>
-    <p>Вставьте ссылки из адресной строки вашего браузера, чтобы сгенерировать персональный дашборд.</p>
+    <p>Вставьте ссылки, чтобы сгенерировать готовый дашборд.</p>
     <input type="text" id="setup-form-url" placeholder="Ссылка на Google Форму (viewform)">
     <input type="text" id="setup-chart-url" placeholder="Ссылка на Google График (pubchart)">
+    <input type="text" id="setup-entry-id" placeholder="ID поля веса (Необязательно, например: entry.123456789)">
     <button class="custom-btn" onclick="generateDashboardLink()" style="padding: 12px 24px;">Создать дашборд</button>
   </div>
 
@@ -124,7 +125,7 @@ title: Универсальный Контроль Веса
     
     <div class="ui-card" id="form-card-wrapper">
       <h2>Ввести вес</h2>
-      <p id="form-status" style="color: #4a5568;">Синхронизация с вашей Google Формой...</p>
+      <p id="form-status" style="color: #4a5568;">Загрузка модуля ввода...</p>
       
       <form id="custom-weight-form" action="" method="POST" target="hidden_iframe">
         <div class="weight-form-group">
@@ -145,7 +146,7 @@ title: Универсальный Контроль Веса
       <div style="display: flex; justify-content: space-between; align-items: flex-start;">
         <div>
           <h2>История изменений</h2>
-          <p>График обновится автоматически через 4 секунды после сохранения или взаимодействия.</p>
+          <p>Интерактивный график обновляется автоматически после отправки данных.</p>
         </div>
         <div class="refresh-badge">
           <div class="spinner" id="refresh-spinner"></div>
@@ -167,12 +168,12 @@ title: Универсальный Контроль Веса
   const urlParams = new URLSearchParams(window.location.search);
   const rawFormUrl = urlParams.get('form');
   const rawChartUrl = urlParams.get('chart');
+  const paramEntryId = urlParams.get('entry');
 
   const welcomeCard = document.getElementById('welcome-card');
   const mainDashboard = document.getElementById('main-dashboard');
   const formElement = document.getElementById('custom-weight-form');
   const inputElement = document.getElementById('weight-input');
-  const btnElement = document.getElementById('submit-btn');
   const formStatus = document.getElementById('form-status');
   const chartIframe = document.getElementById('responsive-interactive-chart');
   const spinner = document.getElementById('refresh-spinner');
@@ -183,11 +184,12 @@ title: Универсальный Контроль Веса
   const formCardWrapper = document.getElementById('form-card-wrapper');
 
   let userInteracted = false;
-  let updateInterval = null;
 
+  // Если параметров нет — включаем конфигуратор
   if (!rawFormUrl || !rawChartUrl) {
     welcomeCard.style.display = 'block';
   } else {
+    // Параметры на месте — разворачиваем дашборд
     mainDashboard.style.display = 'block';
     
     const cleanedFormUrl = rawFormUrl.split('?')[0].replace('/formResponse', '/viewform');
@@ -198,79 +200,43 @@ title: Универсальный Контроль Веса
 
     formElement.action = cleanedFormUrl.replace('/viewform', '/formResponse');
     chartIframe.src = cleanedChartUrl;
-
-    // Сразу настраиваем резервный iframe на случай неудачи парсинга
     originalIframe.src = cleanedFormUrl + '?embedded=true';
 
-    // Пробуем кастомизировать
-    autoDiscoverFieldId(cleanedFormUrl);
-  }
-
-  async function autoDiscoverFieldId(targetFormUrl) {
-    try {
-      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetFormUrl)}`;
-      const response = await fetch(proxyUrl);
-      if(!response.ok) throw new Error("CORS Proxy failed");
+    // ОПРЕДЕЛЕНИЕ РЕЖИМА РАБОТЫ ФОРМЫ
+    if (paramEntryId && paramEntryId.startsWith('entry.')) {
+      // Идеальный режим: ID передан. Включаем кастомную форму
+      inputElement.name = paramEntryId;
+      formElement.style.display = 'block';
+      formStatus.innerText = "Система готова к быстрому вводу веса.";
       
-      const htmlText = await response.text();
-      const regex = /FB_PUBLIC_LOAD_DATA_\s*=\s*(.*?);/s;
-      const match = htmlText.match(regex);
-
-      if (match && match[1]) {
-        const rawData = JSON.parse(match[1]);
-        const firstFieldId = rawData[1][1][0][4][0][0];
-        
-        // Успех! Активируем кастомную форму
-        inputElement.name = `entry.${firstFieldId}`;
-        formElement.style.display = 'block';
-        formStatus.innerText = "Система готова к быстрому вводу веса.";
-        
-        // Навешиваем обработчик на кастомную форму
-        initCustomFormLogic();
-      } else {
-        throw new Error("Парсинг структуры не удался");
-      }
-    } catch (error) {
-      console.warn("Кастомизация не удалась. Включаем бесшовный откат к оригиналу.");
-      
-      // Откат: прячем кастомную форму, показываем оригинальный фрейм Google
+      formElement.addEventListener('submit', function() {
+        triggerChartRefresh(4000); // Перерисовать график через 4 сек после клика
+        setTimeout(() => { inputElement.value = ''; }, 500);
+      });
+    } else {
+      // Режим отката: ID нет. Показываем стандартный интерфейс формы
       formElement.style.display = 'none';
       fallbackWrapper.style.display = 'block';
       formStatus.innerHTML = "Используется стандартный интерфейс ввода.";
       
-      // Запускаем отслеживание активности для оригинального фрейма (чтобы график всё равно обновлялся по таймеру)
-      initFallbackTimerLogic();
+      // Таймер обновления графика при кликах по стандартной форме
+      formCardWrapper.addEventListener('click', startSmartTimer);
+      formCardWrapper.addEventListener('touchstart', startSmartTimer);
+      window.addEventListener('blur', function() {
+        if (document.activeElement.tagName === 'IFRAME' && document.activeElement.id === 'original-google-iframe') {
+          startSmartTimer();
+        }
+      });
     }
-  }
-
-  // СЦЕНАРИЙ А: Логика работы идеальной кастомной формы
-  function initCustomFormLogic() {
-    formElement.addEventListener('submit', function() {
-      triggerChartRefresh(4000); // Обновляем через 4 секунды после клика "Сохранить"
-      setTimeout(() => { inputElement.value = ''; }, 500);
-    });
-  }
-
-  // СЦЕНАРИЙ Б: Логика для оригинального Iframe (запуск фонового обновления при тапе/клике)
-  function initFallbackTimerLogic() {
-    formCardWrapper.addEventListener('click', startSmartTimer);
-    formCardWrapper.addEventListener('touchstart', startSmartTimer);
-
-    window.addEventListener('blur', function() {
-      if (document.activeElement.tagName === 'IFRAME' && document.activeElement.id === 'original-google-iframe') {
-        startSmartTimer();
-      }
-    });
   }
 
   function startSmartTimer() {
     if (userInteracted) return;
     userInteracted = true;
-    // В режиме iframe обновляем каждые 10 секунд после того, как пользователь нажал на форму
-    updateInterval = setInterval(() => { triggerChartRefresh(0); }, 10000);
+    setInterval(() => { triggerChartRefresh(0); }, 10000);
   }
 
-  // Универсальный движок перезагрузки графика в обход кэша
+  // Перезагрузка интерактивного графика в обход кэша
   function triggerChartRefresh(delayMs) {
     setTimeout(function() {
       if (!chartIframe) return;
@@ -290,14 +256,20 @@ title: Универсальный Контроль Веса
     }, delayMs);
   }
 
-  // Генератор ссылок для главного экрана
+  // Сборщик персональной ссылки для адресной строки
   function generateDashboardLink() {
     const fUrl = document.getElementById('setup-form-url').value.trim();
     const cUrl = document.getElementById('setup-chart-url').value.trim();
+    const eId = document.getElementById('setup-entry-id').value.trim();
+    
     if(fUrl && cUrl) {
-      window.location.href = `${window.location.origin}${window.location.pathname}?form=${encodeURIComponent(fUrl)}&chart=${encodeURIComponent(cUrl)}`;
+      let finalLink = `${window.location.origin}${window.location.pathname}?form=${encodeURIComponent(fUrl)}&chart=${encodeURIComponent(cUrl)}`;
+      if(eId) {
+        finalLink += `&entry=${encodeURIComponent(eId.includes('entry.') ? eId : 'entry.' + eId)}`;
+      }
+      window.location.href = finalLink;
     } else {
-      alert("Пожалуйста, заполните обе ссылки!");
+      alert("Пожалуйста, заполните поля формы и графика!");
     }
   }
 </script>
