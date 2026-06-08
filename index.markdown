@@ -141,7 +141,7 @@ title: Tracker
     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
       <div>
         <h2>Текущая статистика</h2>
-        <p>Данные обновляются автоматически каждые 7 секунд после начала взаимодействия.</p>
+        <p>Данные подгружаются напрямую из Google Таблиц без задержек кэширования.</p>
       </div>
       <div class="refresh-badge" id="status-badge">
         <div class="spinner" id="refresh-spinner"></div>
@@ -149,8 +149,11 @@ title: Tracker
       </div>
     </div>
 
-    <div class="chart-wrapper">
-      <img id="responsive-image-chart" src="https://docs.google.com/spreadsheets/d/e/2PACX-1vT5y16P0vfS6N0x70eDhHBIM-pPb1e0k--lfKurgEcWIBHtlv-KD9LyXVkP3RnLuOFnSEOSWE5AIb7N/pubchart?oid=24048480&format=image" alt="График аналитики">
+    <div class="chart-wrapper" style="height: 400px; position: relative;">
+      <iframe id="responsive-interactive-chart" 
+              src="https://docs.google.com/spreadsheets/d/e/2PACX-1vT5y16P0vfS6N0x70eDhHBIM-pPb1e0k--lfKurgEcWIBHtlv-KD9LyXVkP3RnLuOFnSEOSWE5AIb7N/pubchart?oid=24048480&format=interactive" 
+              style="position: absolute; top:0; left:0; width:100%; height:100%; border:none;">
+      </iframe>
     </div>
   </div>
 
@@ -159,26 +162,27 @@ title: Tracker
 <script>
   let userInteracted = false;
   let updateInterval = null;
-  const chartImg = document.getElementById('responsive-image-chart');
+  const chartIframe = document.getElementById('responsive-interactive-chart');
   const spinner = document.getElementById('refresh-spinner');
   const statusText = document.getElementById('status-text');
   const formWrapper = document.getElementById('form-card-wrapper');
 
   function reloadChartData() {
-    if (!chartImg) return;
+    if (!chartIframe) return;
     
+    // Визуальный фидбек
     spinner.style.display = 'block';
     statusText.innerText = 'Обновление...';
-    chartImg.style.opacity = '0.7';
+    chartIframe.style.opacity = '0.5';
 
-    const originalSrc = chartImg.src.split('&cacheBust=')[0];
+    // Для iframe трюк с cacheBust работает на ура:
+    // Мы заставляем фрейм полностью перезагрузить живую веб-страницу графика
+    const originalSrc = chartIframe.src.split('&cacheBust=')[0];
+    chartIframe.src = originalSrc + '&cacheBust=' + new Date().getTime();
     
-    const newImg = new Image();
-    newImg.src = originalSrc + '&cacheBust=' + new Date().getTime();
-    
-    newImg.onload = function() {
-      chartImg.src = newImg.src;
-      chartImg.style.opacity = '1';
+    // Как только фрейм загрузился заново
+    chartIframe.onload = function() {
+      chartIframe.style.opacity = '1';
       spinner.style.display = 'none';
       statusText.innerText = 'Обновлено';
       
@@ -188,13 +192,13 @@ title: Tracker
     };
   }
 
-  // Активация таймера при кликах / тапах по форме
+  // Включение таймера при активности (клики / тапы) по форме
   formWrapper.addEventListener('click', startSmartTimer);
   formWrapper.addEventListener('touchstart', startSmartTimer);
 
   // Для ПК: уход фокуса в iframe формы
   window.addEventListener('blur', function() {
-    if (document.activeElement.tagName === 'IFRAME') {
+    if (document.activeElement.tagName === 'IFRAME' && document.activeElement.id !== 'responsive-interactive-chart') {
       startSmartTimer();
     }
   });
@@ -203,7 +207,7 @@ title: Tracker
     if (userInteracted) return;
     userInteracted = true;
     
-    // Запуск цикла обновления раз в 7 секунд
-    updateInterval = setInterval(reloadChartData, 7000);
+    // Ставим интервал 10 секунд (даем пользователю дописать/отправить, а Google — секунду на запись в ячейку)
+    updateInterval = setInterval(reloadChartData, 10000);
   }
 </script>
