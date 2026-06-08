@@ -1,15 +1,9 @@
----
-layout: default
-title: Tracker
----
-
 <style>
   :root {
     --bg-card: #ffffff;
     --text-main: #2d3748;
     --text-muted: #718096;
     --border-color: #e2e8f0;
-    --shadow-sm: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
     --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
     --radius: 12px;
   }
@@ -38,7 +32,6 @@ title: Tracker
     margin-bottom: 8px;
     font-size: 1.25rem;
     font-weight: 600;
-    letter-spacing: -0.02em;
   }
 
   .ui-card p {
@@ -47,7 +40,6 @@ title: Tracker
     margin-bottom: 20px;
   }
 
-  /* Адаптивный контейнер для нативной формы Google */
   .form-wrapper {
     position: relative;
     width: 100%;
@@ -58,31 +50,26 @@ title: Tracker
 
   .form-wrapper iframe {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    top: 0; left: 0; width: 100%; height: 100%;
     border: none;
   }
 
-  /* Контейнер для адаптивного графика */
-  .chart-wrapper {
-    display: flex;
-    justify-content: center;
-    align-items: center;
+  /* СВЕРХАДАПТИВНЫЙ КОНТЕЙНЕР ДЛЯ ГРАФИКА */
+  .chart-responsive-container {
+    position: relative;
     width: 100%;
-    padding: 10px 0;
+    height: 400px; /* Фиксированная высота для десктопа */
+    overflow: hidden;
   }
 
-  .chart-wrapper img {
+  /* На компах график просто заполняет область */
+  .chart-responsive-container iframe {
     width: 100%;
-    height: auto;
-    max-width: 100%;
-    object-fit: contain;
+    height: 100%;
+    border: none;
     transition: opacity 0.3s ease;
   }
 
-  /* Индикатор обновления в стиле iOS/Material */
   .refresh-badge {
     display: inline-flex;
     align-items: center;
@@ -97,8 +84,7 @@ title: Tracker
   }
 
   .spinner {
-    width: 12px;
-    height: 12px;
+    width: 12px; height: 12px;
     border: 2px solid #cbd5e0;
     border-top-color: #4a5568;
     border-radius: 50%;
@@ -106,22 +92,43 @@ title: Tracker
     display: none;
   }
 
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* Оптимизация под мобильные устройства */
-  @media (max-width: 480px) {
+  /* ТРЮК ДЛЯ СМАРТФОНОВ: Масштабируем интерактивный фрейм */
+  @media (max-width: 600px) {
     .dashboard-container {
       padding: 12px 8px;
     }
     .ui-card {
       padding: 16px;
       margin-bottom: 16px;
-      border-radius: var(--radius);
     }
     .form-wrapper {
       height: 920px; 
+    }
+    
+    /* Меняем логику контейнера на мобильных */
+    .chart-responsive-container {
+      height: 260px; /* Уменьшаем высоту контейнера, так как сам график сожмется */
+    }
+    
+    .chart-responsive-container iframe {
+      width: 160%; /* Делаем виртуальный экран шире */
+      height: 160%;
+      /* Сжимаем картинку интерактивного графика обратно в границы экрана телефона */
+      transform: scale(0.625); 
+      transform-origin: top left;
+    }
+  }
+
+  @media (max-width: 400px) {
+    .chart-responsive-container {
+      height: 210px;
+    }
+    .chart-responsive-container iframe {
+      width: 200%;
+      height: 200%;
+      transform: scale(0.5);
     }
   }
 </style>
@@ -141,7 +148,7 @@ title: Tracker
     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
       <div>
         <h2>Текущая статистика</h2>
-        <p>Данные подгружаются напрямую из Google Таблиц без задержек кэширования.</p>
+        <p>Интерактивные живые данные без задержек кэширования.</p>
       </div>
       <div class="refresh-badge" id="status-badge">
         <div class="spinner" id="refresh-spinner"></div>
@@ -149,10 +156,9 @@ title: Tracker
       </div>
     </div>
 
-    <div class="chart-wrapper" style="height: 400px; position: relative;">
+    <div class="chart-responsive-container">
       <iframe id="responsive-interactive-chart" 
-              src="https://docs.google.com/spreadsheets/d/e/2PACX-1vT5y16P0vfS6N0x70eDhHBIM-pPb1e0k--lfKurgEcWIBHtlv-KD9LyXVkP3RnLuOFnSEOSWE5AIb7N/pubchart?oid=24048480&format=interactive" 
-              style="position: absolute; top:0; left:0; width:100%; height:100%; border:none;">
+              src="https://docs.google.com/spreadsheets/d/e/2PACX-1vT5y16P0vfS6N0x70eDhHBIM-pPb1e0k--lfKurgEcWIBHtlv-KD9LyXVkP3RnLuOFnSEOSWE5AIb7N/pubchart?oid=24048480&format=interactive">
       </iframe>
     </div>
   </div>
@@ -170,17 +176,13 @@ title: Tracker
   function reloadChartData() {
     if (!chartIframe) return;
     
-    // Визуальный фидбек
     spinner.style.display = 'block';
     statusText.innerText = 'Обновление...';
     chartIframe.style.opacity = '0.5';
 
-    // Для iframe трюк с cacheBust работает на ура:
-    // Мы заставляем фрейм полностью перезагрузить живую веб-страницу графика
     const originalSrc = chartIframe.src.split('&cacheBust=')[0];
     chartIframe.src = originalSrc + '&cacheBust=' + new Date().getTime();
     
-    // Как только фрейм загрузился заново
     chartIframe.onload = function() {
       chartIframe.style.opacity = '1';
       spinner.style.display = 'none';
@@ -192,11 +194,9 @@ title: Tracker
     };
   }
 
-  // Включение таймера при активности (клики / тапы) по форме
   formWrapper.addEventListener('click', startSmartTimer);
   formWrapper.addEventListener('touchstart', startSmartTimer);
 
-  // Для ПК: уход фокуса в iframe формы
   window.addEventListener('blur', function() {
     if (document.activeElement.tagName === 'IFRAME' && document.activeElement.id !== 'responsive-interactive-chart') {
       startSmartTimer();
@@ -206,8 +206,6 @@ title: Tracker
   function startSmartTimer() {
     if (userInteracted) return;
     userInteracted = true;
-    
-    // Ставим интервал 10 секунд (даем пользователю дописать/отправить, а Google — секунду на запись в ячейку)
     updateInterval = setInterval(reloadChartData, 10000);
   }
 </script>
